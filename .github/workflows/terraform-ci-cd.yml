@@ -1,0 +1,75 @@
+name: Terraform Manual Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment tfvars (dev|prod)"
+        required: true
+        default: dev
+      plan_only:
+        description: "Set true to only run plan (no apply)"
+        required: false
+        default: "false"
+
+env:
+  TF_LOG: INFO
+  WORKING_DIR: terraform
+
+jobs:
+  plan_apply:
+    name: Plan & (optional) Apply
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.5
+
+      - name: Terraform Format Check
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Init
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform init -input=false
+
+      - name: Terraform Validate
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform validate
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          terraform plan -input=false -var-file="env/${{ github.event.inputs.environment }}.tfvars" -out=tfplan
+          terraform show -no-color tfplan > plan.txt
+
+      - name: Upload Plan Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ github.event.inputs.environment }}
+          path: terraform/plan.txt
+
+      - name: Terraform Apply
+        if: github.event.inputs.plan_only != 'true'
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform apply -input=false -auto-approve tfplan
+
+      - name: Show Outputs
+        if: github.event.inputs.plan_only != 'true'
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform output -json > outputs.json
+
+      - name: Upload Outputs
+        if: github.event.inputs.plan_only != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tf-outputs-${{ github.event.inputs.environment }}
+          path: terraform/outputs.json
