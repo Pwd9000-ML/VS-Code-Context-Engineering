@@ -1,10 +1,9 @@
 ---
 mode: 'agent'
-tools: ['githubRepo', 'codebase']
+tools: ['codebase', 'githubRepo', 'github']
 description: 'Generate a new Terraform module structure for an Azure resource.    '
 ---
-Your goal is to generate a new Terraform module structure for an Azure resource based on the templates in #githubRepo contoso/terraform-templates.
-
+Your goal is to generate a new Terraform module structure for an Azure resource based on the templates in #githubRepo contoso/terraform-templates  
 Ask for the module name and any specific requirements if not provided.
 
 Requirements for the module:
