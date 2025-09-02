@@ -1,3 +1,4 @@
 locals {
-    merged_rgs = "var"
+  merged_rgs = "var"
+  fakevar    = "value"
 }
