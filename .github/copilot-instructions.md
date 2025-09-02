@@ -1,70 +1,63 @@
-# AI Coding Agent Guide
+## AI Working Guide for This Repo (Terraform Azure Boilerplate)
 
-Purpose: Enable rapid, consistent contributions to this Terraform Azure infra boilerplate.
-Keep answers specific; prefer editing files directly over generic advice.
+Purpose: Enable fast, safe Terraform changes for a layered Azure infrastructure baseline. Keep edits minimal, composable, and map-driven.
 
-## Big Picture
-- Single domain: provisioning Azure core infra (RGs, Storage Accounts, Key Vaults) via Terraform 1.6+.
-- Layered layout: root orchestrates versioned provider + environment-specific variable maps feeding composable modules under `terraform/modules/*`.
-- Environments are isolated by passing a single `-var-file=env/<env>.tfvars`; no workspaces currently used.
-- Tagging strategy centralized: locals merge `global_tags` + `environment` + per-object `tags` before passing to modules.
+### 1. Big Picture Architecture
+- Root `terraform/` orchestrates modules via map variables + `for_each` (stable addressing). 3 core modules: resource groups, storage accounts, key vaults.
+- Environments are data-only: `env/dev.tfvars`, `env/prod.tfvars` feed maps (resource_groups, storage_accounts, key_vaults).
+- Tag & config normalization happens in `locals` (`main.tf`): merges `global_tags` + `{ environment = var.environment }` + per‑resource tags before passing to modules.
+- Cross-module linkage uses logical map keys (e.g. `storage_accounts.core.resource_group_key = "core"`) then resolved with `module.resource_groups[each.value.resource_group_key].name`.
 
-## Key Directories / Files
-- `terraform/providers.tf` – pins required versions (Terraform >=1.6, azurerm >=3.100). Add new providers here only.
-- `terraform/variables.tf` – canonical contract for root inputs. Maintain optional() defaults pattern.
-- `terraform/main.tf` – orchestration: builds merged locals, then `for_each` module instantiation; new resource types should follow same pattern (local merge + module call + consolidated outputs when useful).
-- `terraform/env/*.tfvars` – authoritative env definitions. Don't hardcode env-specific values elsewhere.
-- `terraform/modules/*` – one logical Azure resource each. Keep: `main.tf`, `variables.tf`, `outputs.tf`; inputs minimal, no hidden data sources unless justified.
+### 2. Key Conventions
+- Module folders numbered (`01_`, `02_`, `03_`) for human ordering; keep naming when adding new modules.
+- Input maps drive multiplicity; prefer extending maps over duplicating module blocks.
+- Always keep provider constraint (`providers.tf`) and feature block untouched unless upgrading intentionally.
+- Sensitive outputs (storage access keys / connection strings) already marked `sensitive = true`; do not print them in added examples or logs.
+- Use lowercase, globally unique names where Azure requires (storage, key vault). Example: `stdevcore001`, `kv-prod-core-001`.
 
-## Conventions / Patterns
-- Module folder naming is numeric-padded for ordering (e.g. `01_`, `02_`). Preserve sequence when inserting new modules; pick next number.
-- Module variable names mirror Azure resource argument names for clarity (e.g. `resource_group_name`).
-- Tag merging happens ONLY in root locals; modules accept final `tags` map verbatim.
-- Cross-module linkage via keys: higher-level maps use a synthetic key (`core`) whose value includes `resource_group_key`; resolving happens in `main.tf` using `module.resource_groups[each.value.resource_group_key]`.
-- Sensitive outputs (keys, connection strings) explicitly flagged `sensitive = true` (see storage module). Follow that for secrets.
-- Use `for_each` over `count` for map-driven resources to enable stable addressing.
-- Access policies for Key Vault use a `dynamic` block iterating provided list; replicate this style for future collection-based nested blocks (e.g. network_acls).
+### 3. Typical Workflows
+- Init & plan (dev): `terraform init && terraform plan -var-file=env/dev.tfvars` inside `terraform/`.
+- Apply: `terraform apply -var-file=env/dev.tfvars` (swap to `prod.tfvars` for prod). Avoid editing tfvars inline; change maps instead.
+- Validation before commit: run `terraform fmt -check` then `terraform validate` then a `plan` for each changed environment.
+- (Optional) Remote state: add backend block (see `terraform/README.md`) only once a storage account exists; do not auto-add if absent.
 
-## Typical Workflow
-```pwsh
-cd terraform
-terraform init
-terraform plan -var-file=env/dev.tfvars
-terraform apply -var-file=env/dev.tfvars
+### 4. Adding a New Resource Type (Pattern)
+1. Create `terraform/modules/NN_<type>/` with `main.tf`, `variables.tf`, `outputs.tf` minimal pattern matching existing modules.
+2. Add a new root variable map (e.g. `variable "<type_plural>" { type = map(object({ ... })) }`).
+3. In `main.tf` add a `local.merged_<type_plural>` applying the consistent tag merge pattern.
+4. Add a `module "<type_plural>"` block with `for_each = local.merged_<type_plural>`.
+5. Extend env `*.tfvars` maps—never hardcode environment logic in module code.
+
+### 5. Editing Existing Resources
+- To add an instance: append a new key entry in the appropriate map within `env/<env>.tfvars` + any needed map in root `variables.tf` (if new type).
+- To change tags: modify only the per-resource `tags` map; global tagging is centralized.
+- To change replication or SKU: update that resource's map entry; no module code change required if variable already exists.
+
+### 6. Cross-Cutting Patterns
+- Tag Merge Formula (replicate exactly): `merge(var.global_tags, { environment = var.environment }, <resource>.tags)`.
+- Resource dependency indirection: never hardcode names—always derive via module outputs (e.g. `module.resource_groups[each.value.resource_group_key].name`).
+- Keep `for_each` (not `count`) to preserve state alignment with logical keys.
+
+### 7. Safe Upgrade Guidelines
+- Provider upgrade: adjust version in `providers.tf`, run `terraform init -upgrade`, inspect plan for all environments.
+- Module addition: prefer incremental commit containing only new module + map wiring + sample tfvars entries.
+
+### 8. What NOT to Do
+- Do not echo sensitive outputs or remove `sensitive = true` flags.
+- Do not inline environment-specific conditionals inside modules; all env variance lives in tfvars maps.
+- Do not rename existing map keys casually—this forces recreation; add new keys instead and deprecate old ones explicitly.
+
+### 9. Quick Example: Adding Another Storage Account (dev only)
+Add to `env/dev.tfvars` under `storage_accounts`:
 ```
-Adjust file to `prod.tfvars` for production. Avoid mixing manual variable flags with tfvars files.
+  logs = {
+    name               = "stdevlogs001"
+    resource_group_key = "core"
+    account_replication_type = "ZRS"
+    tags = { workload = "logs" }
+  }
+```
+Run plan with dev tfvars; no root code change needed.
 
-## Adding a New Resource Type
-1. Create `terraform/modules/NN_<short_name>/` with `main.tf`, `variables.tf`, `outputs.tf`.
-2. Expose minimal required variables; default optional ones using Terraform defaults (or `optional()` in root variable object if map-driven).
-3. Add a new root variable map (e.g. `variable "subnets" { type = map(object({ ... })) }`). Provide `default = {}` if optional.
-4. In `locals {}` create `merged_<plural>` applying the tag merge pattern.
-5. Add a `module` block with `for_each = local.merged_<plural>` mirroring existing modules.
-6. Export aggregate outputs (list or map of names/ids) only if they add reuse value.
-
-## Safe Change Guidelines
-- Before altering provider version constraints, ensure compatibility with existing azurerm arguments.
-- When introducing breaking input changes, make them additive first (new variable) then deprecate; document in `terraform/README.md`.
-- Never embed environment literal strings inside modules; always feed via variables.
-- Keep resource names deterministic (no randomness) to avoid drift across plans.
-
-## Testing / Validation
-- Run `terraform fmt -check` and `terraform validate` after structural changes.
-- Prefer `terraform plan -var-file=env/dev.tfvars` as quick regression check.
-
-## Secrets & Sensitive Data
-- Only the root or modules output sensitive values with `sensitive = true`; do not print them in logs or README examples.
-- Key Vault access policies should reference object IDs provided in tfvars; do not hardcode GUIDs in module code.
-
-## Extensibility Examples
-- To add diagnostics or logging: create a diagnostics module; accept target resource IDs as inputs rather than reaching into other modules' internals.
-- For remote state: add backend block inside existing `terraform {}` (documented in `terraform/README.md`), not a separate file.
-
-## When Unsure
-- Prefer reading existing module patterns before inventing new structures.
-- Surface ambiguities (e.g. naming standards, networking strategy) as TODO comments near the related code instead of guessing.
-
-## Out of Scope
-- No CI/CD workflows or tests exist yet—do not reference pipelines unless adding one.
-
-Provide diffs only; avoid restating whole files unless required.
+---
+If any convention above seems missing or ambiguous, request clarification before generating large refactors.
