@@ -10,6 +10,10 @@ locals {
   merged_key_vaults = { for k, kv in var.key_vaults : k => merge(kv, {
     tags = merge(var.global_tags, { environment = var.environment }, kv.tags)
   }) }
+
+  merged_redis_caches = { for k, rc in var.redis_caches : k => merge(rc, {
+    tags = merge(var.global_tags, { environment = var.environment }, rc.tags)
+  }) }
 }
 
 module "resource_groups" {
@@ -45,6 +49,21 @@ module "key_vaults" {
   tags                = each.value.tags
 }
 
+module "redis_caches" {
+  source   = "./modules/04_az_redis_cache"
+  for_each = local.merged_redis_caches
+
+  name                = each.value.name
+  resource_group_name = module.resource_groups[each.value.resource_group_key].name
+  location            = var.location
+  sku_name            = each.value.sku_name
+  family              = each.value.family
+  capacity            = each.value.capacity
+  enable_non_ssl_port = each.value.enable_non_ssl_port
+  minimum_tls_version = each.value.minimum_tls_version
+  tags                = each.value.tags
+}
+
 output "resource_group_names" {
   value = [for m in module.resource_groups : m.name]
 }
@@ -55,4 +74,8 @@ output "storage_account_names" {
 
 output "key_vault_names" {
   value = [for m in module.key_vaults : m.name]
+}
+
+output "redis_cache_names" {
+  value = [for m in module.redis_caches : m.name]
 }

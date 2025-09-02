@@ -26,3 +26,16 @@ key_vaults = {
     tags               = { workload = "core" }
   }
 }
+
+redis_caches = {
+  core = {
+    name                = "redis-dev-core-001"
+    resource_group_key  = "core"
+    sku_name            = "Basic"
+    family              = "C"
+    capacity            = 1
+    enable_non_ssl_port = false
+    minimum_tls_version = "1.2"
+    tags                = { workload = "core" }
+  }
+}

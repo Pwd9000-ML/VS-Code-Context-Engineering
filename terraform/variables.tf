@@ -45,6 +45,21 @@ variable "key_vaults" {
   default = {}
 }
 
+variable "redis_caches" {
+  description = "Map of Redis Cache definitions"
+  type = map(object({
+    name                = string
+    resource_group_key  = string
+    sku_name            = optional(string, "Basic")        # Basic | Standard | Premium
+    family              = optional(string, "C")            # C = (Basic/Standard), P = (Premium)
+    capacity            = optional(number, 1)               # 0-6 depending on SKU; keep small baseline
+    enable_non_ssl_port = optional(bool, false)
+    minimum_tls_version = optional(string, "1.2")
+    tags                = optional(map(string), {})
+  }))
+  default = {}
+}
+
 variable "global_tags" {
   description = "Global tags merged with per-RG tags"
   type        = map(string)
