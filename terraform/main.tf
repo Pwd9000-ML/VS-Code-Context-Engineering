@@ -5,7 +5,7 @@ locals {
 }
 
 module "resource_groups" {
-  source = "./modules/resource-group"
+  source   = "./modules/resource-group"
   for_each = local.merged_rgs
 
   name     = each.value.name
