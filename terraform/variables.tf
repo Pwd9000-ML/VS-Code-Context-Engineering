@@ -17,6 +17,34 @@ variable "resource_groups" {
   }))
 }
 
+variable "storage_accounts" {
+  description = "Map of storage account definitions"
+  type = map(object({
+    name                     = string
+    resource_group_key       = string
+    account_tier             = optional(string, "Standard")
+    account_replication_type = optional(string, "LRS")
+    tags                     = optional(map(string), {})
+  }))
+  default = {}
+}
+
+variable "key_vaults" {
+  description = "Map of key vault definitions"
+  type = map(object({
+    name               = string
+    resource_group_key = string
+    sku_name           = optional(string, "standard")
+    access_policies = optional(list(object({
+      object_id          = string
+      key_permissions    = list(string)
+      secret_permissions = list(string)
+    })), [])
+    tags = optional(map(string), {})
+  }))
+  default = {}
+}
+
 variable "global_tags" {
   description = "Global tags merged with per-RG tags"
   type        = map(string)
