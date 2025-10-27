@@ -52,7 +52,7 @@ jobs:
           terraform show -no-color tfplan > plan.txt
 
       - name: Upload Plan Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: tfplan-${{ github.event.inputs.environment }}
           path: terraform/plan.txt
@@ -69,7 +69,7 @@ jobs:
 
       - name: Upload Outputs
         if: github.event.inputs.plan_only != 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: tf-outputs-${{ github.event.inputs.environment }}
           path: terraform/outputs.json
